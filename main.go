@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/hajimehoshi/go-mp3"
 	"github.com/hajimehoshi/oto"
@@ -17,9 +18,21 @@ type FrequencyBand struct {
 	max int
 }
 
-func run() error {
+const numSamples = 4608
+const bitSize = 64
+const maxColumnWidth = 40
+const visualChar = "█"
+const magnitudeDivision = 12.0
 
-	f, err := os.Open("song.mp3")
+// most common frequency bands
+var freqBands = []FrequencyBand{
+	{0, 60}, {60, 250}, {250, 500}, // bass, low mid
+	{500, 2000}, {2000, 4000}, {4000, 6000}, // mid, high mid
+	{6000, 10000}, {10000, 20000}, {20000, 40000}} // high
+
+func play(filename string) error {
+
+	f, err := os.Open(filename)
 	if err != nil {
 		return err
 	}
@@ -39,19 +52,11 @@ func run() error {
 	p := c.NewPlayer()
 	defer p.Close()
 
-	const numSamples = 4608
 	buf := make([]byte, numSamples)
 	audioWave := make([]float64, numSamples)
+	magnitudes := make([]float64, numSamples)
+	freqSpectrum := make([]float64, len(freqBands))
 
-	var freqBands = []FrequencyBand{
-		{0, 60}, {60, 250}, {250, 500}, {500, 2000}, {2000, 4000}, {4000, 6000}, {20000, 40000}}
-
-	const bitSize = 64
-	fftCounter := 0
-	const fftDelay = 1
-	const maxColumnWidth = 30
-
-	// TODO: cleanup
 	for {
 		_, err := d.Read(buf)
 		if err != nil {
@@ -59,49 +64,38 @@ func run() error {
 		}
 		p.Write(buf) // Playback
 
-		fftCounter += 1
-		if fftCounter == fftDelay {
-			fftCounter = 0
+		// collect samples to the buffer - converting from byte to float64
+		for i := 0; i < numSamples; i++ {
+			audioWave[i], _ = strconv.ParseFloat(string(buf[i]), bitSize)
+		}
 
-			// collect samples to the buffer
-			for i := 0; i < numSamples; i++ {
-				audioWave[i], _ = strconv.ParseFloat(string(buf[i]), bitSize)
-			}
+		// get the fft for each sample
+		fftOutput := fft.FFTReal(audioWave)
 
-			// get the fft for each sample
-			fftOutput := fft.FFTReal(audioWave)
-			freqSpectrum := make([]int, len(freqBands))
+		// get the magnitudes
+		for i := 0; i < numSamples; i++ {
+			f := fftOutput[i]
+			magnitudes[i] = math.Sqrt((real(f) * real(f)) + (imag(f) * imag(f)))
+		}
 
-			// get the magnitudes
-			var maxMagnitude float64 = -99999
-			magnitudes := make([]float64, numSamples)
-			for i := 0; i < numSamples; i++ {
-				f := fftOutput[i]
-				magnitudes[i] = math.Sqrt((real(f) * real(f)) + (imag(f) * imag(f)))
-				if magnitudes[i] > maxMagnitude {
-					maxMagnitude = magnitudes[i]
+		// get frequency per each sample and assign magnitude
+		for i := 0; i < numSamples; i++ {
+			frequency := i * d.SampleRate() / numSamples
+			for bandIndex := 0; bandIndex < len(freqBands); bandIndex++ {
+				if frequency > freqBands[bandIndex].min && frequency <= freqBands[bandIndex].max {
+					val := math.Max(magnitudes[i]/magnitudeDivision, 0.0)
+					val = math.Min(maxColumnWidth, val)
+					freqSpectrum[bandIndex] = val
 				}
 			}
+		}
 
-			// get peak frequency and assign value
-			for i := 0; i < numSamples; i++ {
-				frequency := i * d.SampleRate() / numSamples
-				for bandIndex := 0; bandIndex < len(freqBands); bandIndex++ {
-					if frequency > freqBands[bandIndex].min && frequency <= freqBands[bandIndex].max {
-						freqSpectrum[bandIndex] = int(magnitudes[i] / maxMagnitude * maxColumnWidth)
-					}
-				}
-			}
+		// clear screen
+		fmt.Print("\033[H\033[2J")
 
-			fmt.Print("\033[H\033[2J")
-
-			// draw the columns to the console - will replace with a proper GUI library later
-			for s := 0; s < len(freqBands); s++ {
-				for i := 0; i < freqSpectrum[s]; i++ {
-					fmt.Print("█")
-				}
-				fmt.Println()
-			}
+		// draw the columns to the console - will replace with a proper GUI library later
+		for s := 0; s < len(freqBands); s++ {
+			fmt.Println(strings.Repeat(visualChar, int(freqSpectrum[s])))
 		}
 
 	}
@@ -110,7 +104,13 @@ func run() error {
 }
 
 func main() {
-	if err := run(); err != nil {
+	if len(os.Args) != 2 {
+		fmt.Printf("Usage: demo_audio_visualizer filename.mp3\n")
+		return
+	}
+
+	filename := os.Args[1]
+	if err := play(filename); err != nil {
 		log.Fatal(err)
 	}
 }
