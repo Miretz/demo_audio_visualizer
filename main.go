@@ -7,9 +7,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/hajimehoshi/go-mp3"
 	"github.com/hajimehoshi/oto"
+	"github.com/inancgumus/screen"
 	"github.com/mjibson/go-dsp/fft"
 )
 
@@ -24,6 +26,8 @@ const maxColumnWidth = 40
 const visualChar = "█"
 const magnitudeDivision = 12.0
 const peakFalloff = 1.2
+
+var mutex sync.Mutex
 
 // most common frequency bands
 var freqBands = []FrequencyBand{
@@ -58,6 +62,8 @@ func play(filename string) error {
 
 	magnitudes := make([]float64, numSamples)
 	freqSpectrum := make([]float64, len(freqBands))
+
+	screen.Clear()
 
 	for {
 		_, err := d.Read(buf)
@@ -96,17 +102,27 @@ func play(filename string) error {
 			}
 		}
 
-		// clear screen
-		fmt.Print("\033[H\033[2J")
-
-		// draw the columns to the console - will replace with a proper GUI library later
-		for s := 0; s < len(freqBands); s++ {
-			fmt.Println(strings.Repeat(visualChar, int(freqSpectrum[s])))
-		}
+		go updateScreen(freqSpectrum, &mutex)
 
 	}
 
 	return nil
+}
+
+func updateScreen(spectrum []float64, m *sync.Mutex) {
+
+	m.Lock()
+
+	screen.MoveTopLeft()
+
+	// draw the columns to the console - will replace with a proper GUI library later
+	for s := 0; s < len(freqBands); s++ {
+		fmt.Print(strings.Repeat(visualChar, int(spectrum[s])))
+		fmt.Print(strings.Repeat(" ", maxColumnWidth-int(spectrum[s])))
+		fmt.Println()
+	}
+
+	m.Unlock()
 }
 
 func main() {
