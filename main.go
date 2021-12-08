@@ -23,12 +23,13 @@ const bitSize = 64
 const maxColumnWidth = 40
 const visualChar = "█"
 const magnitudeDivision = 12.0
+const peakFalloff = 1.2
 
 // most common frequency bands
 var freqBands = []FrequencyBand{
-	{0, 60}, {60, 250}, {250, 500}, // bass, low mid
-	{500, 2000}, {2000, 4000}, {4000, 6000}, // mid, high mid
-	{6000, 10000}, {10000, 20000}, {20000, 40000}} // high
+	{0, 60}, {60, 90}, {90, 250}, {250, 300}, {300, 500}, // bass, low mid
+	{500, 750}, {750, 1000}, {1000, 2000}, {2000, 3000}, {3000, 4000}, // mid, high mid
+	{4000, 6000}, {6000, 8000}, {8000, 10000}, {10000, 20000}, {20000, 40000}} // high
 
 func play(filename string) error {
 
@@ -54,6 +55,7 @@ func play(filename string) error {
 
 	buf := make([]byte, numSamples)
 	audioWave := make([]float64, numSamples)
+
 	magnitudes := make([]float64, numSamples)
 	freqSpectrum := make([]float64, len(freqBands))
 
@@ -80,12 +82,16 @@ func play(filename string) error {
 
 		// get frequency per each sample and assign magnitude
 		for i := 0; i < numSamples; i++ {
-			frequency := i * d.SampleRate() / numSamples
+			frequency := i * d.SampleRate() / (numSamples / 2)
 			for bandIndex := 0; bandIndex < len(freqBands); bandIndex++ {
 				if frequency > freqBands[bandIndex].min && frequency <= freqBands[bandIndex].max {
 					val := math.Max(magnitudes[i]/magnitudeDivision, 0.0)
 					val = math.Min(maxColumnWidth, val)
-					freqSpectrum[bandIndex] = val
+					if val > freqSpectrum[bandIndex] {
+						freqSpectrum[bandIndex] = val
+					} else {
+						freqSpectrum[bandIndex] = math.Max(freqSpectrum[bandIndex]-peakFalloff, 0)
+					}
 				}
 			}
 		}
