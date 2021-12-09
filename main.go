@@ -49,7 +49,7 @@ func play(filename string) error {
 	buf := make([]byte, numSamples)
 	freqSpectrum := make([]float64, spectrumSize)
 
-	rl.InitWindow(windowWidth, windowHeight, "Demo Audio Visualizere")
+	rl.InitWindow(windowWidth, windowHeight, "Demo Audio Visualizer")
 	rl.SetTargetFPS(60)
 	for !rl.WindowShouldClose() {
 

@@ -1,2 +1,4 @@
 # demo_audio_visualizer
-Audio visualizer in Go
+Simple audio visualizer in Go
+
+<img src="screenshot/screenshot.png" >
