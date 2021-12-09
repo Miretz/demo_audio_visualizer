@@ -13,6 +13,7 @@ import (
 	"github.com/hajimehoshi/oto"
 	"github.com/inancgumus/screen"
 	"github.com/mjibson/go-dsp/fft"
+	"github.com/mjibson/go-dsp/window"
 )
 
 type FrequencyBand struct {
@@ -31,7 +32,7 @@ var mutex sync.Mutex
 
 // most common frequency bands
 var freqBands = []FrequencyBand{
-	{0, 60}, {60, 90}, {90, 250}, {250, 300}, {300, 500}, // bass, low mid
+	{30, 60}, {60, 90}, {90, 250}, {250, 300}, {300, 500}, // bass, low mid
 	{500, 750}, {750, 1000}, {1000, 2000}, {2000, 3000}, {3000, 4000}, // mid, high mid
 	{4000, 6000}, {6000, 8000}, {8000, 10000}, {10000, 20000}, {20000, 40000}} // high
 
@@ -59,7 +60,6 @@ func play(filename string) error {
 
 	buf := make([]byte, numSamples)
 	audioWave := make([]float64, numSamples)
-
 	magnitudes := make([]float64, numSamples)
 	freqSpectrum := make([]float64, len(freqBands))
 
@@ -77,17 +77,20 @@ func play(filename string) error {
 			audioWave[i], _ = strconv.ParseFloat(string(buf[i]), bitSize)
 		}
 
+		// apply window function
+		window.Apply(audioWave, window.Hann)
+
 		// get the fft for each sample
 		fftOutput := fft.FFTReal(audioWave)
 
 		// get the magnitudes
-		for i := 0; i < numSamples; i++ {
+		for i := 0; i < numSamples/2-1; i++ {
 			f := fftOutput[i]
 			magnitudes[i] = math.Sqrt((real(f) * real(f)) + (imag(f) * imag(f)))
 		}
 
 		// get frequency per each sample and assign magnitude
-		for i := 0; i < numSamples; i++ {
+		for i := 0; i < numSamples/2-1; i++ {
 			frequency := i * d.SampleRate() / (numSamples / 2)
 			for bandIndex := 0; bandIndex < len(freqBands); bandIndex++ {
 				if frequency > freqBands[bandIndex].min && frequency <= freqBands[bandIndex].max {
@@ -102,23 +105,24 @@ func play(filename string) error {
 			}
 		}
 
-		go updateScreen(freqSpectrum, &mutex)
+		go updateScreen(filename, freqSpectrum, &mutex)
 
 	}
 
 	return nil
 }
 
-func updateScreen(spectrum []float64, m *sync.Mutex) {
+func updateScreen(filename string, spectrum []float64, m *sync.Mutex) {
 
 	m.Lock()
 
 	screen.MoveTopLeft()
 
 	// draw the columns to the console - will replace with a proper GUI library later
-	for s := 0; s < len(freqBands); s++ {
-		fmt.Print(strings.Repeat(visualChar, int(spectrum[s])))
-		fmt.Print(strings.Repeat(" ", maxColumnWidth-int(spectrum[s])))
+	fmt.Println("> Now playing: ", filename)
+	for _, s := range spectrum {
+		fmt.Print(strings.Repeat(visualChar, int(s)))
+		fmt.Print(strings.Repeat(" ", maxColumnWidth-int(s)))
 		fmt.Println()
 	}
 
