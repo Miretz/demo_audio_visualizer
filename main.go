@@ -59,8 +59,6 @@ func play(filename string) error {
 	defer p.Close()
 
 	buf := make([]byte, numSamples)
-	audioWave := make([]float64, numSamples)
-	magnitudes := make([]float64, numSamples)
 	freqSpectrum := make([]float64, len(freqBands))
 
 	screen.Clear()
@@ -72,44 +70,45 @@ func play(filename string) error {
 		}
 		p.Write(buf) // Playback
 
-		// collect samples to the buffer - converting from byte to float64
-		for i := 0; i < numSamples; i++ {
-			audioWave[i], _ = strconv.ParseFloat(string(buf[i]), bitSize)
-		}
-
-		// apply window function
-		window.Apply(audioWave, window.Hann)
-
-		// get the fft for each sample
-		fftOutput := fft.FFTReal(audioWave)
-
-		// get the magnitudes
-		for i := 0; i < numSamples/2-1; i++ {
-			f := fftOutput[i]
-			magnitudes[i] = math.Sqrt((real(f) * real(f)) + (imag(f) * imag(f)))
-		}
-
-		// get frequency per each sample and assign magnitude
-		for i := 0; i < numSamples/2-1; i++ {
-			frequency := i * d.SampleRate() / (numSamples / 2)
-			for bandIndex := 0; bandIndex < len(freqBands); bandIndex++ {
-				if frequency > freqBands[bandIndex].min && frequency <= freqBands[bandIndex].max {
-					val := math.Max(magnitudes[i]/magnitudeDivision, 0.0)
-					val = math.Min(maxColumnWidth, val)
-					if val > freqSpectrum[bandIndex] {
-						freqSpectrum[bandIndex] = val
-					} else {
-						freqSpectrum[bandIndex] = math.Max(freqSpectrum[bandIndex]-peakFalloff, 0)
-					}
-				}
-			}
-		}
-
+		updateSpectrumValues(buf, d.SampleRate(), freqSpectrum)
 		go updateScreen(filename, freqSpectrum, &mutex)
 
 	}
 
 	return nil
+}
+
+func updateSpectrumValues(buffer []byte, sampleRate int, freqSpectrum []float64) {
+	// collect samples to the buffer - converting from byte to float64
+	audioWave := make([]float64, numSamples)
+	for i := 0; i < numSamples; i++ {
+		audioWave[i], _ = strconv.ParseFloat(string(buffer[i]), bitSize)
+	}
+
+	// apply window function
+	window.Apply(audioWave, window.Hann)
+
+	// get the fft for each sample
+	fftOutput := fft.FFTReal(audioWave)
+
+	// get the magnitudes
+	for i := 0; i < numSamples/2-1; i++ {
+		fr := real(fftOutput[i])
+		fi := imag(fftOutput[i])
+		magnitude := math.Sqrt((fr * fr) + (fi * fi))
+		frequency := i * sampleRate / (numSamples / 2)
+		for bandIndex := 0; bandIndex < len(freqBands); bandIndex++ {
+			if frequency > freqBands[bandIndex].min && frequency <= freqBands[bandIndex].max {
+				val := math.Max(magnitude/magnitudeDivision, 0.0)
+				val = math.Min(maxColumnWidth, val)
+				if val > freqSpectrum[bandIndex] {
+					freqSpectrum[bandIndex] = val
+				} else {
+					freqSpectrum[bandIndex] = math.Max(freqSpectrum[bandIndex]-peakFalloff, 0)
+				}
+			}
+		}
+	}
 }
 
 func updateScreen(filename string, spectrum []float64, m *sync.Mutex) {
