@@ -1,3 +1,5 @@
+github.com/gen2brain/raylib-go/raylib v0.0.0-20211114111602-29ba3cc50849 h1:/Z5Piqd55AAQxWS8oEPF1xgDVntA+W0HeEdsb5pbTVk=
+github.com/gen2brain/raylib-go/raylib v0.0.0-20211114111602-29ba3cc50849/go.mod h1:+NbsqGlEQqGqrsgJFF5Yj2dkvn0ML2SQb8RqM2hJsPU=
 github.com/hajimehoshi/go-mp3 v0.3.2 h1:xSYNE2F3lxtOu9BRjCWHHceg7S91IHfXfXp5+LYQI7s=
 github.com/hajimehoshi/go-mp3 v0.3.2/go.mod h1:qMJj/CSDxx6CGHiZeCgbiq2DSUkbK0UbtXShQcnfyMM=
 github.com/hajimehoshi/oto v0.6.1/go.mod h1:0QXGEkbuJRohbJaxr7ZQSxnju7hEhseiPx2hrh6raOI=
