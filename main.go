@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"io"
 	"log"
 	"math"
@@ -34,8 +33,9 @@ func play() error {
 	var d *mp3.Decoder
 	var c *oto.Context
 	var p *oto.Player
-	var count int32 = 0
 	var filename string
+
+	isPlaying := false
 
 	rl.InitWindow(windowWidth, windowHeight, "Demo Audio Visualizer")
 	rl.SetTargetFPS(60)
@@ -43,66 +43,70 @@ func play() error {
 	for !rl.WindowShouldClose() {
 
 		// handle file drag and drop
-		if rl.IsFileDropped() && count == 0 {
+		if rl.IsFileDropped() {
+			var count int32 = 0
 			files := rl.GetDroppedFiles(&count)
-			filename = files[len(files)-1] // last file
+			lastFile := files[len(files)-1]
+			rl.ClearDroppedFiles()
 
-			if !strings.HasSuffix(filename, ".mp3") {
-				return errors.New("Invalid fileype given: " + filename)
-			}
+			if lastFile != filename && strings.HasSuffix(lastFile, ".mp3") {
+				filename = lastFile
 
-			// clear the buffers
-			for i := range buf {
-				buf[i] = byte(0)
-			}
-			for i := range freqSpectrum {
-				freqSpectrum[i] = 0.0
-			}
+				// clear the buffers
+				for i := range buf {
+					buf[i] = byte(0)
+				}
+				for i := range freqSpectrum {
+					freqSpectrum[i] = 0.0
+				}
 
-			// close any open files
-			if f != nil {
-				f.Close()
-			}
-			if c != nil {
-				c.Close()
-			}
-			if p != nil {
-				p.Close()
-			}
+				// close any open files
+				if p != nil {
+					p.Close()
+				}
+				if c != nil {
+					c.Close()
+				}
+				if f != nil {
+					f.Close()
+				}
 
-			// open the new file
-			var err error
-			f, err = os.Open(filename)
-			if err != nil {
-				return err
+				// open the new file
+				var err error
+				f, err = os.Open(filename)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+				d, err = mp3.NewDecoder(f)
+				if err != nil {
+					return err
+				}
+				c, err = oto.NewContext(d.SampleRate(), 2, 2, 8192)
+				if err != nil {
+					return err
+				}
+				defer c.Close()
+				p = c.NewPlayer()
+				defer p.Close()
+				isPlaying = true
 			}
-			defer f.Close()
-			d, err = mp3.NewDecoder(f)
-			if err != nil {
-				return err
-			}
-			c, err = oto.NewContext(d.SampleRate(), 2, 2, 8192)
-			if err != nil {
-				return err
-			}
-			defer c.Close()
-			p = c.NewPlayer()
-			defer p.Close()
 		}
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.Black)
 
-		if count == 0 {
+		if !isPlaying {
 			rl.DrawText("Drop your files to this window!", 220, 200, 20, rl.LightGray)
 		} else {
 
 			_, err := d.Read(buf)
 			if err != nil {
 				if err == io.EOF {
-					break
+					isPlaying = false
+				} else {
+					return err
 				}
-				return err
 			}
 			updateSpectrumValues(buf, d.SampleRate(), freqSpectrum)
 			p.Write(buf) // Playback
@@ -121,10 +125,10 @@ func play() error {
 		rl.EndDrawing()
 	}
 
-	rl.ClearDroppedFiles()
 	rl.CloseWindow()
 
 	return nil
+
 }
 
 func updateSpectrumValues(buffer []byte, sampleRate int, freqSpectrum []float64) {
