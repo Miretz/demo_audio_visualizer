@@ -33,7 +33,8 @@ func play() error {
 	var d *mp3.Decoder
 	var c *oto.Context
 	var p *oto.Player
-	var filename string
+	var filePath string
+	var fileName string
 
 	isPlaying := false
 
@@ -46,11 +47,11 @@ func play() error {
 		if rl.IsFileDropped() {
 			var count int32 = 0
 			files := rl.GetDroppedFiles(&count)
-			lastFile := files[len(files)-1]
+			newFile := files[len(files)-1]
 			rl.ClearDroppedFiles()
 
-			if lastFile != filename && strings.HasSuffix(lastFile, ".mp3") {
-				filename = lastFile
+			if newFile != filePath && strings.HasSuffix(newFile, ".mp3") {
+				filePath = newFile
 
 				// clear the buffers
 				for i := range buf {
@@ -73,10 +74,12 @@ func play() error {
 
 				// open the new file
 				var err error
-				f, err = os.Open(filename)
+				f, err = os.Open(filePath)
 				if err != nil {
 					return err
 				}
+				fs, _ := f.Stat()
+				fileName = fs.Name()
 				defer f.Close()
 				d, err = mp3.NewDecoder(f)
 				if err != nil {
@@ -111,15 +114,14 @@ func play() error {
 			updateSpectrumValues(buf, d.SampleRate(), freqSpectrum)
 			p.Write(buf) // Playback
 
-			size := float32(freqSpectrum[0])
-			rl.DrawCircleGradient(windowWidth/2, windowHeight/2, size, rl.DarkGray, rl.Black)
+			rl.DrawCircleGradient(windowWidth/2, windowHeight/2, float32(freqSpectrum[0])/2.0, rl.DarkGray, rl.Black)
 
 			for i, s := range freqSpectrum {
-				rl.DrawRectangleGradientV(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Orange, rl.DarkGreen)
+				rl.DrawRectangleGradientV(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Orange, rl.Green)
 				rl.DrawRectangleLines(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Black)
 			}
 
-			rl.DrawText("Now Playing: "+filename, 40, 40, 14, rl.LightGray)
+			rl.DrawText("Now Playing: "+fileName, 40, 40, 20, rl.White)
 		}
 
 		rl.EndDrawing()
