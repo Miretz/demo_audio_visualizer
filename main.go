@@ -1,12 +1,13 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"log"
 	"math"
 	"os"
 	"strconv"
+	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"github.com/hajimehoshi/go-mp3"
@@ -24,56 +25,103 @@ const columnWidth = 20
 const peakFalloff = 8.0
 const bitSize = 64
 
-func play(filename string) error {
-
-	f, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	d, err := mp3.NewDecoder(f)
-	if err != nil {
-		return err
-	}
-
-	c, err := oto.NewContext(d.SampleRate(), 2, 2, 8192)
-	if err != nil {
-		return err
-	}
-	defer c.Close()
-
-	p := c.NewPlayer()
-	defer p.Close()
+func play() error {
 
 	buf := make([]byte, numSamples)
 	freqSpectrum := make([]float64, spectrumSize)
 
+	var f *os.File
+	var d *mp3.Decoder
+	var c *oto.Context
+	var p *oto.Player
+	var count int32 = 0
+	var filename string
+
 	rl.InitWindow(windowWidth, windowHeight, "Demo Audio Visualizer")
 	rl.SetTargetFPS(60)
+
 	for !rl.WindowShouldClose() {
 
-		_, err := d.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				break
+		// handle file drag and drop
+		if rl.IsFileDropped() && count == 0 {
+			files := rl.GetDroppedFiles(&count)
+			filename = files[len(files)-1] // last file
+
+			if !strings.HasSuffix(filename, ".mp3") {
+				return errors.New("Invalid fileype given: " + filename)
 			}
-			return err
+
+			// clear the buffers
+			for i := range buf {
+				buf[i] = byte(0)
+			}
+			for i := range freqSpectrum {
+				freqSpectrum[i] = 0.0
+			}
+
+			// close any open files
+			if f != nil {
+				f.Close()
+			}
+			if c != nil {
+				c.Close()
+			}
+			if p != nil {
+				p.Close()
+			}
+
+			// open the new file
+			var err error
+			f, err = os.Open(filename)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			d, err = mp3.NewDecoder(f)
+			if err != nil {
+				return err
+			}
+			c, err = oto.NewContext(d.SampleRate(), 2, 2, 8192)
+			if err != nil {
+				return err
+			}
+			defer c.Close()
+			p = c.NewPlayer()
+			defer p.Close()
 		}
-		updateSpectrumValues(buf, d.SampleRate(), freqSpectrum)
-		p.Write(buf) // Playback
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.Black)
 
-		for i, s := range freqSpectrum {
-			rl.DrawRectangleGradientV(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Orange, rl.Green)
+		if count == 0 {
+			rl.DrawText("Drop your files to this window!", 220, 200, 20, rl.LightGray)
+		} else {
+
+			_, err := d.Read(buf)
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return err
+			}
+			updateSpectrumValues(buf, d.SampleRate(), freqSpectrum)
+			p.Write(buf) // Playback
+
+			size := float32(freqSpectrum[0])
+			rl.DrawCircleGradient(windowWidth/2, windowHeight/2, size, rl.DarkGray, rl.Black)
+
+			for i, s := range freqSpectrum {
+				rl.DrawRectangleGradientV(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Orange, rl.DarkGreen)
+				rl.DrawRectangleLines(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Black)
+			}
+
+			rl.DrawText("Now Playing: "+filename, 40, 40, 14, rl.LightGray)
 		}
 
-		rl.DrawText("Now Playing: "+filename, 190, 200, 20, rl.LightGray)
 		rl.EndDrawing()
 	}
 
+	rl.ClearDroppedFiles()
 	rl.CloseWindow()
 
 	return nil
@@ -107,13 +155,7 @@ func updateSpectrumValues(buffer []byte, sampleRate int, freqSpectrum []float64)
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Printf("Usage: demo_audio_visualizer filename.mp3\n")
-		return
-	}
-	filename := os.Args[1]
-	if err := play(filename); err != nil {
+	if err := play(); err != nil {
 		log.Fatal(err)
 	}
-
 }
