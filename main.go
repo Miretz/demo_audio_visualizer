@@ -24,18 +24,18 @@ const columnWidth = 20
 const peakFalloff = 8.0
 const bitSize = 64
 
+var f *os.File
+var d *mp3.Decoder
+var c *oto.Context
+var p *oto.Player
+
 func play() error {
 
 	buf := make([]byte, numSamples)
 	freqSpectrum := make([]float64, spectrumSize)
 
-	var f *os.File
-	var d *mp3.Decoder
-	var c *oto.Context
-	var p *oto.Player
 	var filePath string
 	var fileName string
-
 	isPlaying := false
 
 	rl.InitWindow(windowWidth, windowHeight, "Demo Audio Visualizer")
@@ -49,49 +49,13 @@ func play() error {
 			files := rl.GetDroppedFiles(&count)
 			newFile := files[len(files)-1]
 			rl.ClearDroppedFiles()
-
 			if newFile != filePath && strings.HasSuffix(newFile, ".mp3") {
 				filePath = newFile
-
-				// clear the buffers
-				for i := range buf {
-					buf[i] = byte(0)
-				}
-				for i := range freqSpectrum {
-					freqSpectrum[i] = 0.0
-				}
-
-				// close any open files
-				if p != nil {
-					p.Close()
-				}
-				if c != nil {
-					c.Close()
-				}
-				if f != nil {
-					f.Close()
-				}
-
-				// open the new file
 				var err error
-				f, err = os.Open(filePath)
+				fileName, err = updateFileHandlers(filePath)
 				if err != nil {
 					return err
 				}
-				fs, _ := f.Stat()
-				fileName = fs.Name()
-				defer f.Close()
-				d, err = mp3.NewDecoder(f)
-				if err != nil {
-					return err
-				}
-				c, err = oto.NewContext(d.SampleRate(), 2, 2, 8192)
-				if err != nil {
-					return err
-				}
-				defer c.Close()
-				p = c.NewPlayer()
-				defer p.Close()
 				isPlaying = true
 			}
 		}
@@ -128,9 +92,44 @@ func play() error {
 	}
 
 	rl.CloseWindow()
-
+	closeFileHandlers()
 	return nil
+}
 
+func closeFileHandlers() {
+	if p != nil {
+		p.Close()
+	}
+	if c != nil {
+		c.Close()
+	}
+	if f != nil {
+		f.Close()
+	}
+}
+
+func updateFileHandlers(filePath string) (string, error) {
+	closeFileHandlers()
+	var err error
+	f, err = os.Open(filePath)
+	if err != nil {
+		return filePath, err
+	}
+	d, err = mp3.NewDecoder(f)
+	if err != nil {
+		return filePath, err
+	}
+	c, err = oto.NewContext(d.SampleRate(), 2, 2, 8192)
+	if err != nil {
+		return filePath, err
+	}
+	p = c.NewPlayer()
+
+	fs, err := f.Stat()
+	if err != nil {
+		return filePath, err
+	}
+	return fs.Name(), nil
 }
 
 func updateSpectrumValues(buffer []byte, sampleRate int, freqSpectrum []float64) {
