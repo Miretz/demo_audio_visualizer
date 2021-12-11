@@ -34,7 +34,6 @@ func play() error {
 	buf := make([]byte, numSamples)
 	freqSpectrum := make([]float64, spectrumSize)
 
-	var filePath string
 	var fileName string
 	isPlaying := false
 
@@ -49,10 +48,9 @@ func play() error {
 			files := rl.GetDroppedFiles(&count)
 			newFile := files[len(files)-1]
 			rl.ClearDroppedFiles()
-			if newFile != filePath && strings.HasSuffix(newFile, ".mp3") {
-				filePath = newFile
+			if strings.HasSuffix(newFile, ".mp3") {
 				var err error
-				fileName, err = updateFileHandlers(filePath)
+				fileName, err = updateFileHandlers(newFile)
 				if err != nil {
 					return err
 				}
