@@ -32,10 +32,11 @@ var p *oto.Player
 func play() error {
 
 	buf := make([]byte, numSamples)
+	audioWave := make([]float64, numSamples)
 	freqSpectrum := make([]float64, spectrumSize)
-
-	var fileName string
 	isPlaying := false
+
+	nowPlayingText := ""
 
 	rl.InitWindow(windowWidth, windowHeight, "Demo Audio Visualizer")
 	rl.SetTargetFPS(60)
@@ -49,12 +50,12 @@ func play() error {
 			newFile := files[len(files)-1]
 			rl.ClearDroppedFiles()
 			if strings.HasSuffix(newFile, ".mp3") {
-				var err error
-				fileName, err = updateFileHandlers(newFile)
+				fileName, err := updateFileHandlers(newFile)
 				if err != nil {
 					return err
 				}
 				isPlaying = true
+				nowPlayingText = "Now Playing: " + fileName
 			}
 		}
 
@@ -67,6 +68,7 @@ func play() error {
 			rl.DrawRectangleLines(20, 20, windowWidth-40, windowHeight-40, rl.LightGray)
 		} else {
 
+			// read buffer, update spectrum and play audio
 			_, err := d.Read(buf)
 			if err != nil {
 				if err == io.EOF {
@@ -75,14 +77,14 @@ func play() error {
 					return err
 				}
 			}
-			updateSpectrumValues(buf, d.SampleRate(), freqSpectrum)
-			p.Write(buf) // Playback
+			updateSpectrumValues(buf, audioWave, d.SampleRate(), freqSpectrum)
+			p.Write(buf)
 
 			for i, s := range freqSpectrum {
 				rl.DrawRectangleGradientV(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Orange, rl.Green)
 				rl.DrawRectangleLines(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Black)
 			}
-			rl.DrawText("Now Playing: "+fileName, 40, 40, 20, rl.White)
+			rl.DrawText(nowPlayingText, 40, 40, 20, rl.White)
 		}
 
 		rl.EndDrawing()
@@ -129,9 +131,8 @@ func updateFileHandlers(filePath string) (string, error) {
 	return fs.Name(), nil
 }
 
-func updateSpectrumValues(buffer []byte, sampleRate int, freqSpectrum []float64) {
+func updateSpectrumValues(buffer []byte, audioWave []float64, sampleRate int, freqSpectrum []float64) {
 	// collect samples to the buffer - converting from byte to float64
-	audioWave := make([]float64, numSamples)
 	for i := 0; i < numSamples; i++ {
 		audioWave[i], _ = strconv.ParseFloat(string(buffer[i]), bitSize)
 	}
