@@ -18,9 +18,9 @@ import (
 const numSamples = 4608
 const windowWidth = 800
 const windowHeight = 450
-const spectrumSize = 40
+const spectrumSize = 80
 const maxColumnHeight = 450
-const columnWidth = 20
+const columnWidth = 10
 const peakFalloff = 8.0
 const bitSize = 64
 
@@ -58,11 +58,13 @@ func play() error {
 			}
 		}
 
+		// drawing code
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.Black)
 
 		if !isPlaying {
 			rl.DrawText("Drop your files to this window!", 220, 200, 20, rl.LightGray)
+			rl.DrawRectangleLines(20, 20, windowWidth-40, windowHeight-40, rl.LightGray)
 		} else {
 
 			_, err := d.Read(buf)
@@ -76,13 +78,10 @@ func play() error {
 			updateSpectrumValues(buf, d.SampleRate(), freqSpectrum)
 			p.Write(buf) // Playback
 
-			rl.DrawCircleGradient(windowWidth/2, windowHeight/2, float32(freqSpectrum[0])/2.0, rl.DarkGray, rl.Black)
-
 			for i, s := range freqSpectrum {
 				rl.DrawRectangleGradientV(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Orange, rl.Green)
 				rl.DrawRectangleLines(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Black)
 			}
-
 			rl.DrawText("Now Playing: "+fileName, 40, 40, 20, rl.White)
 		}
 
