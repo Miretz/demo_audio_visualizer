@@ -90,8 +90,8 @@ func play() error {
 		rl.EndDrawing()
 	}
 
-	rl.CloseWindow()
-	closeFileHandlers()
+	defer rl.CloseWindow()
+	defer closeFileHandlers()
 	return nil
 }
 
