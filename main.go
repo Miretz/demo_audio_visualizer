@@ -32,9 +32,6 @@ func play() error {
 	buf := make([]byte, numSamples)
 	audioWave := make([]float64, numSamples)
 	freqSpectrum := make([]float64, spectrumSize)
-	isPlaying := false
-
-	var nowPlayingText string
 
 	rl.SetConfigFlags(rl.FlagWindowResizable)
 	var windowWidth int32 = defaultWindowWidth
@@ -43,23 +40,23 @@ func play() error {
 	rl.InitWindow(windowWidth, windowHeight, "Demo Audio Visualizer")
 	rl.SetTargetFPS(60)
 
+	isPlaying := false
+	var nowPlayingText string
+
 	for !rl.WindowShouldClose() {
 
 		// Update on resize
 		windowWidth = int32(rl.GetScreenWidth())
 		windowHeight = int32(rl.GetScreenHeight())
+		columnWidth := int32(windowWidth / spectrumSize)
 
 		// handle file drag and drop
 		if rl.IsFileDropped() {
-			var count int32 = 0
-			files := rl.GetDroppedFiles(&count)
-			newFile := files[len(files)-1]
-			rl.ClearDroppedFiles()
-			if strings.HasSuffix(newFile, ".mp3") {
-				fileName, err := updateFileHandlers(newFile)
-				if err != nil {
-					return err
-				}
+			isOk, fileName, err := handleFileDrop()
+			if err != nil {
+				return err
+			}
+			if isOk {
 				isPlaying = true
 				nowPlayingText = "Now Playing: " + fileName
 			}
@@ -70,16 +67,7 @@ func play() error {
 		rl.ClearBackground(rl.Black)
 
 		if !isPlaying {
-
-			// ensure message is in the center
-			font := rl.GetFontDefault()
-			message := "Drop your files to this window!"
-			textPos := rl.Vector2{
-				X: float32(windowWidth)/2.0 - rl.MeasureTextEx(font, message, 16.0, 2).X/2.0,
-				Y: float32(windowHeight)/2.0 - float32(font.BaseSize)/2.0}
-			rl.DrawTextEx(font, message, textPos, 16.0, 2, rl.White)
-			rl.DrawRectangleLines(20, 20, windowWidth-40, windowHeight-40, rl.LightGray)
-
+			drawDropzone(windowWidth, windowHeight)
 		} else {
 
 			// read buffer, update spectrum and play audio
@@ -94,8 +82,6 @@ func play() error {
 			updateSpectrumValues(buf, audioWave, d.SampleRate(), float64(windowHeight), freqSpectrum)
 			p.Write(buf)
 
-			columnWidth := int32(windowWidth / spectrumSize)
-
 			for i, s := range freqSpectrum {
 				rl.DrawRectangleGradientV(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Orange, rl.Green)
 				rl.DrawRectangleLines(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Black)
@@ -109,6 +95,32 @@ func play() error {
 	defer rl.CloseWindow()
 	defer closeFileHandlers()
 	return nil
+}
+
+func handleFileDrop() (bool, string, error) {
+	var count int32 = 0
+	files := rl.GetDroppedFiles(&count)
+	newFile := files[len(files)-1]
+	rl.ClearDroppedFiles()
+	if strings.HasSuffix(newFile, ".mp3") {
+		fileName, err := updateFileHandlers(newFile)
+		if err != nil {
+			return false, err.Error(), err
+		}
+		return true, fileName, nil
+	}
+	return false, "Bad file type", nil
+}
+
+func drawDropzone(windowWidth, windowHeight int32) {
+	var fontSize float32 = 16.0
+	font := rl.GetFontDefault()
+	message := "Drop your files to this window!"
+	textPos := rl.Vector2{
+		X: float32(windowWidth)/2.0 - rl.MeasureTextEx(font, message, fontSize, 2).X/2.0,
+		Y: float32(windowHeight)/2.0 - fontSize/2.0}
+	rl.DrawTextEx(font, message, textPos, fontSize, 2, rl.White)
+	rl.DrawRectangleLines(20, 20, windowWidth-40, windowHeight-40, rl.LightGray)
 }
 
 func closeFileHandlers() {
