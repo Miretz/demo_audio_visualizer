@@ -16,11 +16,9 @@ import (
 )
 
 const numSamples = 4608
-const windowWidth = 800
-const windowHeight = 450
+const defaultWindowWidth = 800
+const defaultWindowHeight = 450
 const spectrumSize = 80
-const maxColumnHeight = 450
-const columnWidth = 10
 const peakFalloff = 8.0
 const bitSize = 64
 
@@ -36,12 +34,20 @@ func play() error {
 	freqSpectrum := make([]float64, spectrumSize)
 	isPlaying := false
 
-	nowPlayingText := ""
+	var nowPlayingText string
+
+	rl.SetConfigFlags(rl.FlagWindowResizable)
+	var windowWidth int32 = defaultWindowWidth
+	var windowHeight int32 = defaultWindowHeight
 
 	rl.InitWindow(windowWidth, windowHeight, "Demo Audio Visualizer")
 	rl.SetTargetFPS(60)
 
 	for !rl.WindowShouldClose() {
+
+		// Update on resize
+		windowWidth = int32(rl.GetScreenWidth())
+		windowHeight = int32(rl.GetScreenHeight())
 
 		// handle file drag and drop
 		if rl.IsFileDropped() {
@@ -64,8 +70,16 @@ func play() error {
 		rl.ClearBackground(rl.Black)
 
 		if !isPlaying {
-			rl.DrawText("Drop your files to this window!", 220, 200, 20, rl.LightGray)
+
+			// ensure message is in the center
+			font := rl.GetFontDefault()
+			message := "Drop your files to this window!"
+			textPos := rl.Vector2{
+				X: float32(windowWidth)/2.0 - rl.MeasureTextEx(font, message, 16.0, 2).X/2.0,
+				Y: float32(windowHeight)/2.0 - float32(font.BaseSize)/2.0}
+			rl.DrawTextEx(font, message, textPos, 16.0, 2, rl.White)
 			rl.DrawRectangleLines(20, 20, windowWidth-40, windowHeight-40, rl.LightGray)
+
 		} else {
 
 			// read buffer, update spectrum and play audio
@@ -77,8 +91,10 @@ func play() error {
 					return err
 				}
 			}
-			updateSpectrumValues(buf, audioWave, d.SampleRate(), freqSpectrum)
+			updateSpectrumValues(buf, audioWave, d.SampleRate(), float64(windowHeight), freqSpectrum)
 			p.Write(buf)
+
+			columnWidth := int32(windowWidth / spectrumSize)
 
 			for i, s := range freqSpectrum {
 				rl.DrawRectangleGradientV(int32(i)*columnWidth, windowHeight-int32(s), columnWidth, int32(s), rl.Orange, rl.Green)
@@ -131,7 +147,7 @@ func updateFileHandlers(filePath string) (string, error) {
 	return fs.Name(), nil
 }
 
-func updateSpectrumValues(buffer []byte, audioWave []float64, sampleRate int, freqSpectrum []float64) {
+func updateSpectrumValues(buffer []byte, audioWave []float64, sampleRate int, maxValue float64, freqSpectrum []float64) {
 	// collect samples to the buffer - converting from byte to float64
 	for i := 0; i < numSamples; i++ {
 		audioWave[i], _ = strconv.ParseFloat(string(buffer[i]), bitSize)
@@ -148,7 +164,7 @@ func updateSpectrumValues(buffer []byte, audioWave []float64, sampleRate int, fr
 		fr := real(fftOutput[i])
 		fi := imag(fftOutput[i])
 		magnitude := math.Sqrt(fr*fr + fi*fi)
-		val := math.Min(maxColumnHeight, math.Abs(magnitude))
+		val := math.Min(maxValue, math.Abs(magnitude))
 		if freqSpectrum[i] > val {
 			freqSpectrum[i] = math.Max(freqSpectrum[i]-peakFalloff, 0.0)
 		} else {
